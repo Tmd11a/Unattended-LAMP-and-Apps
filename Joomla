@@ -1,0 +1,59 @@
+#!/bin/bash
+USER="tmd11a"
+PASS="Myles"
+IP="104.219.55.210"
+
+apt-get -q -y update
+
+apt-get -y install unzip php7.0-mysql php7.0-curl php7.0-json php7.0-cgi php7.0 libapache2-mod-php7.0 php7.0-mcrypt php7.0-xml php7.0-xmlrpc
+
+
+
+#Get Joomla from web and unzip it
+cd /tmp
+wget https://github.com/joomla/joomla-cms/releases/download/3.7.0-rc4/Joomla_3.7.0-rc4-Release_Candidate-Full_Package.zip
+mkdir /var/www/html/joomla
+unzip -q Joomla*.zip -d /var/www/html/joomla
+cd ~
+
+
+#Set permissions for web directory
+chown -R www-data:www-data /var/www/html
+chmod -R 755 /var/www/html
+
+service apache2 restart
+
+#Add Joomla DB
+mysql -e "CREATE DATABASE joomla;"
+mysql -e "GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,CREATE TEMPORARY TABLES,DROP,INDEX,ALTER ON joomla.* TO '$USER'@'localhost' IDENTIFIED BY '$PASS' WITH GRANT OPTION;"
+mysql -e "FLUSH PRIVILEGES;"
+
+
+#Need to enable the Joomla files, and also make a symbolic link to the enabled sites
+a2enmod rewrite
+touch /etc/apache2/sites-available/joomla.conf
+ln -s /etc/apache2/sites-available/joomla.conf /etc/apache2/sites-enabled/joomla.conf
+
+
+cat <<'EOF'>> /etc/apache2/sites-available/joomla.conf
+<VirtualHost *:80>
+ServerAdmin tmd11a@acu.edu
+DocumentRoot /var/www/html/joomla
+ServerName 104.219.55.210
+ServerAlias it410-tmd11a-test.com
+<Directory /var/www/html/>
+Options FollowSymLinks
+AllowOverride All
+Order allow,deny
+allow from all
+</Directory>
+ErrorLog /var/log/apache2/joomla-error_log
+CustomLog /var/log/apache2/joomla-access_log common
+</VirtualHost>
+EOF
+
+#curl -s "http://$IP/wordpress/wp-admin/install.php?step=2" --data-urlencode "weblog_title=IT410-tmd11a" --data-urlencode "user_name=$USER" --data-urlencode "admin_email=tmd11a@acu.edu" --data-urlencode "admin_password=$PASS" --data-urlencode "admin_password2=$PASS" --data-urlencode "pw_weak=1" --data-urlencode "Submit=Install+WordPress"
+
+curl -s "http://$IP/joomla/installation/index.php" --data-urlencodeSite Name=joomla_test_site --data-urlencode "Description=IT410-tmd11a" --data-urlencode "Admin Email=tmd11a@acu.edu" --data-urlencode "Admin Username=tmd11a" --data-urlencode "Admin password=Myles" --data-urlencode "Confirm Admin Password=Myles" --data-urlencode "Site Offline=No"
+
+service apache2 restart

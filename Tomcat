@@ -1,0 +1,93 @@
+#!/bin/bash
+USER="Tmd11a"
+PASS="Myles"
+IP="104.219.55.210"
+
+apt-get -q update
+
+#Install Java
+apt-get -y -q install default-jdk
+
+#Add group/user for Tomcat, setting home to opt
+groupadd tomcat
+mkdir /opt/tomcat
+useradd -s /bin/false -g tomcat -d /opt/tomcat tomcat
+
+#Download Tomcat latest tarball
+cd /tmp
+wget http://apache.mirrors.ionfish.org/tomcat/tomcat-8/v8.5.14/bin/apache-tomcat-8.5.14.tar.gz
+tar -xzvf apache-tomcat-8.5.14.tar.gz
+mv apache-tomcat-8.5.14/* /opt/tomcat
+
+
+#Give Tomcat permissions to the Tomcat opt directory, and other files/directories
+chgrp -R tomcat /opt/tomcat
+chown -R tomcat /opt/tomcat
+chmod -R 755 /opt/tomcat
+
+touch /etc/systemd/system/tomcat.service
+
+cat <<EOF >/etc/systemd/system/tomcat.service
+[Unit]
+Description=Apache Tomcat Web Server
+After=network.target
+
+[Service]
+Type=forking
+
+Environment=JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre
+Environment=CATALINA_PID=/opt/tomcat/temp/tomcat.pid
+Environment=CATALINA_HOME=/opt/tomcat
+Environment=CATALINA_BASE=/opt/tomcat
+Environment='CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC'
+Environment='JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom'
+
+ExecStart=/opt/tomcat/bin/startup.sh
+ExecStop=/opt/tomcat/bin/shutdown.sh
+
+User=tomcat
+Group=tomcat
+UMask=0007
+RestartSec=15
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+
+#Restart these services (Note: I was curious because usually Debian enviro use "service" instead)
+systemctl daemon-reload
+systemctl start tomcat
+systemctl enable tomcat
+
+#Delete the last line in xml file then append the appropriate lines at teh end (closing it in the xml tag)
+sed -i '$d' /opt/tomcat/conf/tomcat-users.xml
+cat <<EOF >> /opt/tomcat/conf/tomcat-users.xml
+<role rolename="manager-gui"/>
+<role rolename="admin-gui"/>
+<user username="tmd11a" password="Myles" roles="manager-gui,admin-gui"/>
+</tomcat-users>
+EOF
+
+#Delete the lines after the 'allow=' then append the appropriate lines for both files
+#Also make backups just for good measure
+cp /opt/tomcat/webapps/manager/META-INF/context.xml /opt/tomcat/webapps/manager/META-INF/context.xml.bak
+sed -i '/<Valve/,$d' /opt/tomcat/webapps/manager/META-INF/context.xml
+cat <<EOF >> /opt/tomcat/webapps/manager/META-INF/context.xml
+<!-- <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+        allow="*" /> -->
+</Context>
+EOF
+
+cp /opt/tomcat/webapps/host-manager/META-INF/context.xml /opt/tomcat/webapps/host-manager/META-INF/context.xml.bak
+sed -i '/<Valve/,$d' /opt/tomcat/webapps/host-manager/META-INF/context.xml
+cat <<EOF >> /opt/tomcat/webapps/host-manager/META-INF/context.xml
+<!-- <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+        allow="*" /> -->
+</Context>
+</Context>
+EOF
+
+
+systemctl restart tomcat

@@ -1,0 +1,49 @@
+#!/bin/bash
+USER="tmd11a"
+PW="Myles"
+IP="104.219.55.210"
+
+apt-get update -q
+apt-get install -y maven
+
+a2enconf php7.0-cgi
+
+service apache2 restart
+
+#We install LDAP and its utilities and also preseed it
+export DEBIAN_FRONTEND='non-interactive'
+echo -e "slapd slapd/root_password password $PW" |debconf-set-selections
+echo -e "slapd slapd/root_password_again password $PW" |debconf-set-selections
+apt-get install -y slapd ldap-utils phpldapadmin
+
+export DEBIAN_FRONTEND='non-interactive'
+echo -e "slapd slapd/internal/adminpw password $PW" |debconf-set-selections
+echo -e "slapd slapd/internal/generated_adminpw password $PW" |debconf-set-selections
+echo -e "slapd slapd/password2 password $PW" |debconf-set-selections
+echo -e "slapd slapd/password1 password $PW" |debconf-set-selections
+echo -e "slapd slapd/domain string acu.local" |debconf-set-selections
+echo -e "slapd shared/organization string IT410" |debconf-set-selections
+echo -e "slapd slapd/backend string HDB" |debconf-set-selections
+echo -e "slapd slapd/purge_database boolean true" |debconf-set-selections
+echo -e "slapd slapd/move_old_database boolean true" |debconf-set-selections
+echo -e "slapd slapd/allow_ldap_v2 boolean false" |debconf-set-selections
+echo -e "slapd slapd/no_configuration boolean false" |debconf-set-selections
+dpkg-reconfigure -f noninteractive slapd
+
+
+
+#Change the ldap config file to reflect our login
+chmod 777 /etc/ldap/ldap.conf
+sed -i 's@#BASE.*@BASE   dc=acu,dc=local@' /etc/ldap/ldap.conf
+sed -i "s@#URI.*@URI    ldap://$IP ldap://$IP:666@" /etc/ldap/ldap.conf
+chmod 644 /etc/ldap/ldap.conf
+
+sed -i "s/$servers->setValue('server','name','My LDAP Server');.*/$servers->setValue('server','name','IT410 Tmd11a');/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('server','host','127.0.0.1');/$servers->setValue('server','host','$IP');/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('server','base',array('dc=example,dc=com'));/$servers->setValue('server','base',array('dc=acu,dc=local'));/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('login','bind_id','cn=admin,dc=example,dc=com');/$servers->setValue('login','bind_id','cn=admin,dc=acu,dc=local');/" /etc/phpldapadmin/config.php
+
+sed -i "s@$default = $this->getServer()->getValue('appearance','password_hash');.*@$default = $this->getServer()->getValue('appearance','password_hash_custom');@g" /usr/share/phpldapadmin/lib/TemplateRender.php
+
+
+service apache2 restart
