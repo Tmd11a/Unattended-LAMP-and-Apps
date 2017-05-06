@@ -1,0 +1,60 @@
+#!/bin/bash
+USER=""
+PASS=""
+IP=""
+
+#Setup WP database
+mysql -e "CREATE DATABASE wordpress DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci"
+mysql -e "GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,CREATE TEMPORARY TABLES,DROP,INDEX,ALTER ON wordpress.* TO '$USER'@'%' IDENTIFIED BY '$PASS';"
+mysql -e "FLUSH PRIVILEGES;"
+
+cd /tmp
+curl -O https://wordpress.org/latest.tar.gz
+tar xzf latest.tar.gz
+
+#Setup file structure in tmp directory
+touch /tmp/wordpress/.htaccess
+chmod 660 /tmp/wordpress/.htaccess
+cp /tmp/wordpress/wp-config-sample.php /tmp/wordpress/wp-config.php
+mkdir /tmp/wordpress/wp-content/upgrade
+
+#Copy over everything from the WP directory to WP web subdirectory
+mkdir /var/www/html/wordpress
+cp -a /tmp/wordpress/. /var/www/html/wordpress
+
+
+#Change owners, and then curl secure keys to the correct file
+chown -R $USER:www-data /var/www/html/wordpress
+curl -s https://api.wordpress.org/secret-key/1.1/salt/ > /var/www/html/wordpress/wp-saltkeys
+
+
+#Create backup file for WP config
+cp /var/www/html/wordpress/wp-config.php /var/www/html/wordpress/wp-config.php.bak
+
+sed -i "s/define('DB_NAME', 'database_name_here');/define('DB_NAME', 'wordpress');/" /var/www/html/wordpress/wp-config.php
+sed -i "s/define('DB_USER', 'username_here');/define('DB_USER', '$USER');/" /var/www/html/wordpress/wp-config.php
+sed -i "s/define('DB_PASSWORD', 'password_here');/define('DB_PASSWORD', '$PASS');/" /var/www/html/wordpress/wp-config.php
+
+
+#Delete the define keys section, then append them on the end
+sed -i "/define('AUTH_KEY',         'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('SECURE_AUTH_KEY',  'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('LOGGED_IN_KEY',    'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('NONCE_KEY',        'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('AUTH_SALT',        'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('SECURE_AUTH_SALT', 'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('LOGGED_IN_SALT',   'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+sed -i "/define('NONCE_SALT',       'put your unique phrase here');/d" /var/www/html/wordpress/wp-config.php
+#Append the salted keys to the WP config (THIS COULD HAVE BEEN THE ISSUE I ENCOUNTERED)
+#cat /var/www/html/wordpress/wp-saltkeys >> /var/www/html/wordpress/wp-config.php
+
+echo "define('FS_METHOD', 'direct');" >> wp-config.php
+
+
+#This curl statement posts the form data, and I have put it to silent so it doesn't output to screen
+curl -s "http://$IP/wordpress/wp-admin/install.php?step=2" --data-urlencode "weblog_title=IT410-$USER" --data-urlencode "user_name=$USER" --data-urlencode "admin_email=$USER@acu.edu" --data-urlencode "admin_password=$PASS" --data-urlencode "admin_password2=$PASS" --data-urlencode "pw_weak=1" --data-urlencode "Submit=Install+WordPress"
+
+#Insure permissions are set
+chown -R www-data:www-data /var/www/html/wordpress
+
+service apache2 restart

@@ -1,0 +1,39 @@
+#!/bin/bash
+USER=""
+PW=""
+IP=""
+
+
+#Install apache2
+apt-get -y -q install apache2 php7.0 php7.0-curl php7.0-gd php7.0-mbstring php7.0-mysql libapache2-mod-php7.0 php7.0-mcrypt php7.0-bz2 php7.0-zip php7.0-json php7.0-xsl php7.0-imap php7.0-common php7.0-dev php7.0-cli  php7.0-imap php7.0-xmlrpc php7.0-cgi php-pear
+
+#Install mailutils without prompt
+debconf-set-selections <<< "postfix postfix/mailname string $USER@acu.edu"
+debconf-set-selections <<< "postfix postfix/main_mailer_type string 'Internet Site'"
+apt-get install -y mailutils
+
+#Activate it and restart service
+a2enmod ssl
+service apache2 restart
+
+mkdir /etc/apache2/ssl/
+
+#OpenSSL generate a password first then a certificate
+openssl genrsa -out /etc/apache2/ssl/apache.key 2048
+openssl req -nodes -new -key /etc/apache2/ssl/apache.key -out /etc/apache2/ssl/apache.csr -subj "/C=US/ST=Texas/L=Abilene/O=ACU/OU=IT410/CN=$USERtest"
+echo -e "--\nopenssl key and cert created" >> /var/log/$USERLogs
+
+#Make backup of config files
+cp /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-available/default-ssl.conf.bak
+
+#Change HTTP and HTTPS config files for apache
+chmod 777 -R /etc/apache2/sites-available/default-ssl.conf
+sed -i 's/ServerAdmin.*/ServerAdmin $USER@acu.edu/' /etc/apache2/sites-available/default-ssl.conf
+sed -i "s/ServerName.*/ServerName $USER@$IP:443/" /etc/apache2/sites-available/default-ssl.conf
+sed -i 's:SSLCertificateFile      /etc/ssl/ssl-cert-snakeoil.pem:SSLCertificateFile /etc/apache2/ssl/apache.crt:' /etc/apache2/sites-available/default-ssl.conf
+sed -i 's:SLCertificateKeyFile /etc/ssl/ssl-cert-snakeoil.key:SSLCertificateKeyFile /etc/apache2/ssl/apache.key:' /etc/apache2/sites-available/default-ssl.conf
+chmod 755 -R /etc/apache2/sites-available/default-ssl.conf
+#Enable apache sites
+a2ensite default-ssl.conf
+
+service apache2 restart

@@ -1,0 +1,39 @@
+#!/bin/bash
+USER=""
+PW=""
+IP=""
+
+#Install additional packages for Moodle
+apt-get install -y graphviz aspell php7.0 libapache2-mod-php7.0 php7.0-pspell php7.0-curl php7.0-gd php7.0-intl php7.0-mysql php7.0-xml php7.0-xmlrpc php7.0-ldap php7.0-zip php7.0-soap
+apt-get -qq install git-core
+
+#Install Moodle
+cd /opt
+git clone git://git.moodle.org/moodle.git
+cd moodle
+git branch -a
+git branch --track MOODLE_32_STABLE origin/MOODLE_32_STABLE
+git checkout MOODLE_32_STABLE
+echo -e "--\nMoodle installed" >> /var/log/$USERLogs
+
+#Setup folder structure with permissions
+cp -R /opt/moodle /var/www/html/
+mkdir /var/moodledata
+chown -R www-data /var/moodledata
+chmod -R 777 /var/moodledata
+chmod -R 777 /var/www/html/moodle
+
+echo -e "--\nMoodle directory" >> /var/log/$USERLogs
+
+mysql -e "CREATE DATABASE moodle DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
+mysql -e "GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,CREATE TEMPORARY TABLES,DROP,INDEX,ALTER ON moodle.* TO '$USER'@'%' IDENTIFIED BY '$PASS';"
+mysql -e "FLUSH PRIVILEGES;"
+
+#This will finish the install, which would normally be done in browser
+sudo -u www-data /usr/bin/php /var/www/html/moodle/admin/cli/install.php --non-interactive --agree-license --chmod='777' --lang='en' --wwwroot="http://$IP/moodle" --dataroot='/var/moodledata' --dbtype='mysqli' --dbhost='localhost' --dbname='moodle' --dbuser='$USER' --dbpass='$PW' --adminuser='$USER' --adminpass='$PW' --adminemail='$USER@acu.edu' --fullname='it410-$USER' --shortname='it410'
+
+
+service apache2 restart
+
+#Adding cronjob
+(crontab -l 2>/dev/null; echo "*/15 * * * * /usr/bin/php /var/www/html/moodle/admin/cli/cron.php") | crontab -
