@@ -2,6 +2,10 @@
 USER=""
 PW=""
 IP=""
+CNTRY=""
+CITY=""
+ORG=""
+ORGUNIT=""
 
 
 #Install apache2
@@ -20,7 +24,7 @@ mkdir /etc/apache2/ssl/
 
 #OpenSSL generate a password first then a certificate
 openssl genrsa -out /etc/apache2/ssl/apache.key 2048
-openssl req -nodes -new -key /etc/apache2/ssl/apache.key -out /etc/apache2/ssl/apache.csr -subj "/C=US/ST=Texas/L=Abilene/O=ACU/OU=IT410/CN=$USERtest"
+openssl req -nodes -new -key /etc/apache2/ssl/apache.key -out /etc/apache2/ssl/apache.csr -subj "/C=$CNTRY/ST=$ST/L=$CITY/O=$ORG/OU=$ORGUNIT"/CN=$USER"
 echo -e "--\nopenssl key and cert created" >> /var/log/$USERLogs
 
 #Make backup of config files
