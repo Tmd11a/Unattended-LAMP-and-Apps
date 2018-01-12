@@ -1,14 +1,15 @@
 #!/bin/bash
 #Run me as Sudo
-USER=""
-PW=""
-IP=""
-SAMPLE_FILE=""
+USER=''
+PASS=''
+# $1 is our IP address or DNS
+URL='' #The URL should be to the location to download other scripts
 
 echo "-----Initial Setup Script-----"
 apt-get -q update
-#apt-get -y -q upgrade
+apt-get -y -q upgrade
 
+#Silent TZdata install
 echo "US/Central" > /etc/timezone
 dpkg-reconfigure -f noninteractive tzdata
 
@@ -19,31 +20,30 @@ addgroup $USER sudo
 addgroup $USER www-data
 echo -e "$USER:$PASS" | sudo chpasswd
 echo ""
-#read -n1 -p "You have created a new user! Press any key to cont..."
+
 
 #Make logging file
-touch /var/log/$USERLogs
-chown $USER:$USER /var/log/$USERLogs
-chmod 774 /var/log/$USERLogs
-echo -e "-----START-----" > /var/log/$USERLogs #This overwrites a log for a fresh start
-echo -e "--\n$USER has been added and added to GROUP:SUDO" >> /var/log/$USERLogs
+touch /var/log/user-logs
+chown $USER:$USER /var/log/user-logs
+chmod 774 /var/log/user-logs
+echo -e "-----START-----" > /var/log/user-logs #This overwrites a log for a fresh start
+echo -e "--\n$USER has been added and added to GROUP:SUDO" >> /var/log/user-logs
 
 #Setup .ssh and authorized keys for new user ($USER)
 mkdir /home/$USER/.ssh
 chmod 700 /home/$USER/.ssh
 touch /home/$USER/.ssh/authorized_keys
 chown -R $USER:$USER /home/$USER/.ssh
-echo -e "--\nssh directory has been added, with authorized_keys" >> /var/log/$USERLogs
+echo -e "--\nssh directory has been added, with authorized_keys" >> /var/log/user-logs
 
 #Disable root login
 sed -i "s/PermitRootLogin .*/PermitRootLogin no/" /etc/ssh/sshd_config
 service ssh restart
 
-# #My user will not have to provide password for sudo commands
-# sed -i "/%sudo   ALL=(ALL:ALL) ALL/a $USER ALL = NOPASSWD : ALL" /etc/sudoers
+###############################################
+#IP Tables section
+###############################################
 
-
-#read -n1 -p "About to start iptables rules. Press any key to cont..."
 #Firewall Rules
 touch /etc/iptables.firewall.rules
 chmod 777 /etc/iptables.firewall.rules
@@ -106,9 +106,8 @@ cat <<EOF>/etc/iptables.firewall.rules
 COMMIT
 EOF
 
-echo -e "--\niptables has been created" >> /var/log/$USERLogs
+echo -e "--\niptables has been created" >> /var/log/user-logs
 echo ""
-#read -n1 -p "You have setup iptables. Press any key to cont..."
 
 #Save rules to new rules file
 chmod 644 /etc/iptables.firewall.rules
@@ -126,10 +125,13 @@ chmod 771 /etc/network/if-pre-up.d/firewall
 chmod +x /etc/network/if-pre-up.d/firewall
 
 
-echo -e "--\nYou have saved the firewall rules." >> /var/log/$USERLogs
+echo -e "--\nYou have saved the firewall rules." >> /var/log/user-logs
 echo ""
-#read -n1 -p "You have saved the firewall rules. Press any key to cont..."
 
+
+###############################################
+#Fail2Ban section
+###############################################
 
 #Install F2B
 apt-get -q -y install fail2ban
@@ -143,80 +145,90 @@ cat<<EOF > /etc/fail2ban/jail.local
 maxtry = 4
 bantime = 600
 EOF
-
+#Make permissions secure
 chmod 600 /etc/fail2ban/jail.local
 
 
-wget http://www.rfxn.com/downloads/maldetect-current.tar.gz
-tar xfz maldetect-current.tar.gz
-cd maldetect-*
-./install.sh
+
+###############################################
+#MySQL Install section
+###############################################
+
+#Preseed the root password for MySQL
+# sudo debconf-set-selections <<< "mysql-server mysql-server/root_password password $PASS"
+# sudo debconf-set-selections <<< "mysql-server mysql-server/root_password_again password $PASS"
+
+# apt-get -q -y install mysql-server mysql-client
+# if grep -q -F [client] /etc/mysql/my.cnf; then
+#     echo -e "--\nmy.cnf was NOT changed" >> /var/log/user-logs
+# else
+#     echo -e "[client]\nuser = root\npassword = $PASS" >> /etc/mysql/my.cnf
+# fi
+
+# #Bind Address needs to be changed if you want remote access to MySQL
+# sed -i 's/bind-address.*/bind-address            = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# echo "mysqld: ALL" >> /etc/hosts.allow
+
+# service mysql restart
+
+# echo -e "--\nMySQL installed, changed my.cnf" >> /var/log/user-logs
+# echo ""
+# echo -e "--\nMySQL bind address changed, open for Splunk and MySQL WB connect" >> /var/log/user-logs
+# echo ""
 
 
-#MySQL Install
-sudo debconf-set-selections <<< "mysql-server mysql-server/root_password password $PW"
-sudo debconf-set-selections <<< "mysql-server mysql-server/root_password_again password $PW"
+# #Create database, Make new user
+# mysql -e "CREATE DATABASE blank_data;"
+# mysql -e "CREATE USER '$USER'@'%' IDENTIFIED BY '$PASS';"
+# mysql -e "GRANT select, update, insert, delete on blank_data.* to '$USER'@'%' IDENTIFIED BY '$PASS';"
+# mysql -e "FLUSH PRIVILEGES;"
 
-apt-get -q -y install mysql-server mysql-client
+# #Secure the MySQL install by running these queries (Taken from mysql_secure_installation script)
+# mysql -e -f "DELETE FROM mysql.user WHERE User='';"
+# mysql -e -f "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
+# mysql -e -f "DROP DATABASE IF EXISTS test;"
+# mysql -e -f "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
+# mysql -e -f "FLUSH PRIVILEGES;"
 
-if grep -q -F [client] /etc/mysql/my.cnf; then
-    echo -e "--\nmy.cnf was NOT changed" >> /var/log/$USERLogs
-else
-    echo -e "[client]\nuser = root\npassword = $PASS" >> /etc/mysql/my.cnf
-fi
-
-
-echo -e "--\nMySQL installed, changed my.cnf" >> /var/log/$USERLogs
-echo ""
-#read -n1 -p "Done downloading mysql, changed my.cnf Press any key to cont..."
-
-
-#Create database
-mysql -e "CREATE DATABASE it410_data;"
-#Make new user
-mysql -e "CREATE USER '$USER'@'%' IDENTIFIED BY '$PASS';"
-#Grant permissions
-mysql -e "GRANT select, update, insert, delete on it410_data.* to '$USER'@'%' IDENTIFIED BY '$PASS';"
-#Flush it
-mysql -e "FLUSH PRIVILEGES;"
-
-#Secure the MySQL install by running these queries (Taken from mysql_secure_installation script)
-mysql -e -f "DELETE FROM mysql.user WHERE User='';"
-mysql -e -f "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-mysql -e -f "DROP DATABASE IF EXISTS test;"
-mysql -e -f "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
-mysql -e -f "FLUSH PRIVILEGES;"
+# echo -e "--\nblank_data created and mysql_secure_installation run" >> /var/log/user-logs
+# echo ""
+# echo ""
 
 
-echo ""
-
+###############################################
+#Scripts Section
+###############################################
 #Pull other scripts and make them executable
-wget -O /home/$USER/apachessl $SAMPLE_FILE
+wget -O /home/$USER/apachessl $URL
 chmod +x /home/$USER/apachessl
 
-wget -O /home/$USER/moodle $SAMPLE_FILE
+wget -O /home/$USER/moodle $URL
 chmod +x /home/$USER/moodle
 
-wget -O /home/$USER/wordpress $SAMPLE_FILE
+wget -O /home/$USER/wordpress $URL
 chmod +x /home/$USER/wordpress
 
-wget -O /home/$USER/joomla $SAMPLE_FILE
+wget -O /home/$USER/joomla $URL
 chmod +x /home/$USER/joomla
 
-wget -O /home/$USER/sugar $SAMPLE_FILE
+wget -O /home/$USER/sugar $URL
 chmod +x /home/$USER/sugar
 
-wget -O /home/$USER/tomcat $SAMPLE_FILE
+wget -O /home/$USER/tomcat $URL
 chmod +x /home/$USER/tomcat
 
-wget -O /home/$USER/phpmyadmin $SAMPLE_FILE
+wget -O /home/$USER/phpmyadmin $URL
 chmod +x /home/$USER/phpmyadmin
 
-wget -O /home/$USER/ldap $SAMPLE_FILE
+wget -O /home/$USER/ldap $URL
 chmod +x /home/$USER/ldap
+
+wget -O /home/$USER/maldetect $URL
+chmod +x /home/$USER/maldetect
+
 
 echo -e "\n\n-----SSH-----"
 echo -e "ssh-keygen"
-echo -e "ssh-copy-id -i ~/.ssh/id_rsa.pub $USER@$IP"
+echo -e "ssh-copy-id -i ~/.ssh/id_rsa.pub $USER@$1"
 echo ""
-read -n1 -p "Copy the over commands. Press any key to continue..."
