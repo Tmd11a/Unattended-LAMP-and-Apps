@@ -1,7 +1,7 @@
 #!/bin/bash
 USER=""
 PASS=""
-IP=""
+# $1 is IP address
 
 #Setup WP database
 mysql -e "CREATE DATABASE wordpress DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci"
@@ -52,7 +52,7 @@ echo "define('FS_METHOD', 'direct');" >> wp-config.php
 
 
 #This curl statement posts the form data, and I have put it to silent so it doesn't output to screen
-curl -s "http://$IP/wordpress/wp-admin/install.php?step=2" --data-urlencode "weblog_title=IT410-$USER" --data-urlencode "user_name=$USER" --data-urlencode "admin_email=$USER@acu.edu" --data-urlencode "admin_password=$PASS" --data-urlencode "admin_password2=$PASS" --data-urlencode "pw_weak=1" --data-urlencode "Submit=Install+WordPress"
+curl -s "http://$1/wordpress/wp-admin/install.php?step=2" --data-urlencode "weblog_title=blank-$USER" --data-urlencode "user_name=$USER" --data-urlencode "admin_email=$USER@blank.edu" --data-urlencode "admin_password=$PASS" --data-urlencode "admin_password2=$PASS" --data-urlencode "pw_weak=1" --data-urlencode "Submit=Install+WordPress"
 
 #Insure permissions are set
 chown -R www-data:www-data /var/www/html/wordpress

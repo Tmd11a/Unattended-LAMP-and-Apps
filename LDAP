@@ -1,7 +1,7 @@
 #!/bin/bash
 USER=""
 PW=""
-IP=""
+# $1 is IP address
 
 apt-get update -q
 apt-get install -y maven
@@ -21,8 +21,8 @@ echo -e "slapd slapd/internal/adminpw password $PW" |debconf-set-selections
 echo -e "slapd slapd/internal/generated_adminpw password $PW" |debconf-set-selections
 echo -e "slapd slapd/password2 password $PW" |debconf-set-selections
 echo -e "slapd slapd/password1 password $PW" |debconf-set-selections
-echo -e "slapd slapd/domain string acu.local" |debconf-set-selections
-echo -e "slapd shared/organization string IT410" |debconf-set-selections
+echo -e "slapd slapd/domain string blank.local" |debconf-set-selections
+echo -e "slapd shared/organization string blank" |debconf-set-selections
 echo -e "slapd slapd/backend string HDB" |debconf-set-selections
 echo -e "slapd slapd/purge_database boolean true" |debconf-set-selections
 echo -e "slapd slapd/move_old_database boolean true" |debconf-set-selections
@@ -34,14 +34,14 @@ dpkg-reconfigure -f noninteractive slapd
 
 #Change the ldap config file to reflect our login
 chmod 777 /etc/ldap/ldap.conf
-sed -i 's@#BASE.*@BASE   dc=acu,dc=local@' /etc/ldap/ldap.conf
-sed -i "s@#URI.*@URI    ldap://$IP ldap://$IP:666@" /etc/ldap/ldap.conf
+sed -i 's@#BASE.*@BASE   dc=blank,dc=local@' /etc/ldap/ldap.conf
+sed -i "s@#URI.*@URI    ldap://$1 ldap://$1:666@" /etc/ldap/ldap.conf
 chmod 644 /etc/ldap/ldap.conf
 
-sed -i "s/$servers->setValue('server','name','My LDAP Server');.*/$servers->setValue('server','name','IT410 $USER');/" /etc/phpldapadmin/config.php
-sed -i "s/$servers->setValue('server','host','127.0.0.1');/$servers->setValue('server','host','$IP');/" /etc/phpldapadmin/config.php
-sed -i "s/$servers->setValue('server','base',array('dc=example,dc=com'));/$servers->setValue('server','base',array('dc=acu,dc=local'));/" /etc/phpldapadmin/config.php
-sed -i "s/$servers->setValue('login','bind_id','cn=admin,dc=example,dc=com');/$servers->setValue('login','bind_id','cn=admin,dc=acu,dc=local');/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('server','name','My LDAP Server');.*/$servers->setValue('server','name','blank $USER');/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('server','host','127.0.0.1');/$servers->setValue('server','host','$1');/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('server','base',array('dc=example,dc=com'));/$servers->setValue('server','base',array('dc=blank,dc=local'));/" /etc/phpldapadmin/config.php
+sed -i "s/$servers->setValue('login','bind_id','cn=admin,dc=example,dc=com');/$servers->setValue('login','bind_id','cn=admin,dc=blank,dc=local');/" /etc/phpldapadmin/config.php
 
 sed -i "s@$default = $this->getServer()->getValue('appearance','password_hash');.*@$default = $this->getServer()->getValue('appearance','password_hash_custom');@g" /usr/share/phpldapadmin/lib/TemplateRender.php
 

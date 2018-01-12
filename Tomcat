@@ -1,7 +1,7 @@
 #!/bin/bash
 USER=""
 PW=""
-IP=""
+# $1 is IP address
 
 apt-get -q update
 
